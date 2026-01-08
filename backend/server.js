@@ -1,16 +1,29 @@
-﻿import express from "express";
+import express from "express";
 import pkg from "pg";
+
 const { Pool } = pkg;
 
 const app = express();
 app.use(express.json());
 
+
+const DB_HOST = process.env.DB_HOST || "postgres";
+const DB_PORT = Number(process.env.DB_PORT || 5432);
+const DB_USER = process.env.DB_USER || "appuser";
+const DB_NAME = process.env.DB_NAME || "appdb";
+const DB_PASSWORD = process.env.DB_PASSWORD; 
+
+if (!DB_PASSWORD) {
+  console.error("Missing DB_PASSWORD environment variable.");
+  process.exit(1);
+}
+
 const pool = new Pool({
-  host: process.env.DB_HOST || "postgres",
-  port: Number(process.env.DB_PORT || 5432),
-  user: process.env.DB_USER || "appuser",
-  password: process.env.DB_PASSWORD || "apppass",
-  database: process.env.DB_NAME || "appdb",
+  host: DB_HOST,
+  port: DB_PORT,
+  user: DB_USER,
+  password: DB_PASSWORD,
+  database: DB_NAME,
 });
 
 async function init() {
@@ -23,24 +36,48 @@ async function init() {
   `);
 }
 
-app.get("/api/health", async (_, res) => {
-  try { await pool.query("SELECT 1"); res.json({ ok: true }); }
-  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+app.get("/api/health", async (_req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message ?? "unknown error" });
+  }
 });
 
-app.get("/api/items", async (_, res) => {
-  const r = await pool.query("SELECT id,text FROM items ORDER BY id DESC LIMIT 50;");
-  res.json(r.rows);
+app.get("/api/items", async (_req, res) => {
+  try {
+    const r = await pool.query(
+      "SELECT id, text, created_at FROM items ORDER BY id DESC LIMIT 50;"
+    );
+    res.json(r.rows);
+  } catch (e) {
+    res.status(500).json({ error: e?.message ?? "unknown error" });
+  }
 });
 
 app.post("/api/items", async (req, res) => {
-  const text = String(req.body?.text || "").trim();
+  const text = String(req.body?.text ?? "").trim();
   if (!text) return res.status(400).json({ error: "text required" });
-  const r = await pool.query("INSERT INTO items(text) VALUES($1) RETURNING id,text;", [text]);
-  res.status(201).json(r.rows[0]);
+
+  try {
+    const r = await pool.query(
+      "INSERT INTO items(text) VALUES($1) RETURNING id, text, created_at;",
+      [text.slice(0, 255)]
+    );
+    res.status(201).json(r.rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e?.message ?? "unknown error" });
+  }
 });
 
-app.listen(3000, async () => {
-  try { await init(); console.log("backend on 3000"); }
-  catch (e) { console.error("db init fail:", e.message); }
+const PORT = Number(process.env.PORT || 3000);
+
+app.listen(PORT, async () => {
+  try {
+    await init();
+    console.log(`backend on ${PORT}`);
+  } catch (e) {
+    console.error("db init fail:", e?.message ?? e);
+  }
 });
