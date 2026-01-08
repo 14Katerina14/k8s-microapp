@@ -1,0 +1,48 @@
+﻿<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>K8S MicroApp</title>
+  <style>
+    body{font-family:Arial;max-width:760px;margin:40px auto;padding:0 16px}
+    input{padding:10px;width:70%} button{padding:10px}
+    li{margin:6px 0}
+  </style>
+</head>
+<body>
+  <h2>✅ K8S MicroApp</h2>
+  <div id="h">Checking backend...</div>
+  <div style="margin:16px 0">
+    <input id="t" placeholder="Напиши текст...">
+    <button onclick="add()">Add</button>
+    <button onclick="load()">Refresh</button>
+  </div>
+  <ul id="list"></ul>
+
+<script>
+async function health(){
+  try{
+    const r=await fetch('/api/health');
+    const j=await r.json();
+    document.getElementById('h').innerText = j.ok ? 'Backend OK ✅' : 'Backend problem ❌';
+  }catch(e){
+    document.getElementById('h').innerText='Backend down ❌';
+  }
+}
+async function load(){
+  const ul=document.getElementById('list'); ul.innerHTML='';
+  const items=await (await fetch('/api/items')).json();
+  if(!items.length){ ul.innerHTML='<li>(няма записи)</li>'; return; }
+  items.forEach(i=>{ const li=document.createElement('li'); li.innerText=`#${i.id}: ${i.text}`; ul.appendChild(li); });
+}
+async function add(){
+  const v=document.getElementById('t').value.trim(); if(!v) return;
+  document.getElementById('t').value='';
+  await fetch('/api/items',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:v})});
+  load();
+}
+health(); load();
+</script>
+</body>
+</html>
